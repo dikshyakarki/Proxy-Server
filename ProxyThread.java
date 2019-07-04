@@ -1,197 +1,178 @@
 import java.net.*;
 import java.io.*;
 import java.util.*;
-import java.net.URL;
-import javax.net.ssl.HttpsURLConnection;
-
 public class ProxyThread extends Thread
 {
 	
-    private Socket socket = null;
+	private Socket clientSocket = null;
     private static final int BUFFER_SIZE = 32768;
-    
     public ProxyThread(Socket socket)
     {
-    	//Ensure properties from superclass
+    	//Ensure proper behavior from superclass: Thread
         super("ProxyThread");	
-        this.socket = socket;
-        
+        this.clientSocket = socket;        
     }
     
-    //get input from browser
-    //send request to server
-    //get response from server
-    //send response to browser
-    @Override
+    //Get input from browser
+    //Send request to server
+    //Get response from server
+    //Send response to browser
+
     public void run() 
-    {
+    {           	
         try 
         {
-            DataOutputStream out =new DataOutputStream(socket.getOutputStream());
-            BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            DataOutputStream out =new DataOutputStream(clientSocket.getOutputStream());
+            BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
             
-            String requestString = in.readLine();
-	    String headerLine = requestString;
-	    StringBuffer responseBuffer = new StringBuffer();
-	   
-	    //StrikngTokenizer to split the content of the header.
-	    StringTokenizer tokenizer = new StringTokenizer(headerLine);
-	    String httpMethod = tokenizer.nextToken();
-	    String httpQueryString = tokenizer.nextToken();
-	
-	    responseBuffer.append("The HTTP Client request is ....<BR>");
-	        
-	    System.out.println("-----RESPONSE------");
-            while (in.ready())
- 	       {
- 	            // Read the HTTP complete HTTP Query
- 	            responseBuffer.append(requestString + "<BR>");
- 	            System.out.println(requestString);
- 	            requestString = in.readLine();
- 	        } 
-            
-            //end get request from client
-
+            //To read data from the client         
             BufferedReader rd = null;
-            try 
-            {
-            	Boolean blocked=false;
-            	File file = new File("url.txt");
-            	//check to see if url is blocked
-            	try 
-            	{
-            	    Scanner scanner = new Scanner(file);
-            	    while(scanner.hasNextLine()) 
+			//To send data to the client
+            DataOutputStream outData =new DataOutputStream(clientSocket.getOutputStream());
+            //Printing the HTTP Request
+            
+			String urlToCall = "";
+			String inputLine = in.readLine();
+            String[] tokens = inputLine.split(" ");
+            urlToCall = tokens[1];
+            
+            /*This loop reads the request from the client line-by-line,
+             * and prints out the request as string in the console.*/
+			while(!inputLine.isEmpty())
+			{
+				System.out.println(inputLine);
+				inputLine = in.readLine(); 
+			}
+			
+			URL url;
+            url = new URL(urlToCall); 
+			
+			//Initializing a HTTP Connection in the URL requested
+			HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setDoInput(true);
+            conn.setDoOutput(false);
+            InputStream is = null;
+            
+            //getResponseCode would get the response code for the requested URL
+            conn.getResponseCode();
+            
+            //Initializing a boolean to check the cache.
+            boolean cacheHit=false;
+            
+            //A file to store the URL requested
+        	File file = new File("url.txt");
+
+        	//A file to store the cache of the URL
+        	File cache=new File("Cache.txt");
+        	
+
+        	try 
+        	{
+        		//Checking to see if the website is cached.
+        	    Scanner scanner = new Scanner(file);
+        	    if(scanner.hasNextLine())
+        	    {
+            	    String cacheURL=scanner.nextLine();
+            	    
+            	    //If the cached URL is same as the URL requested, the website is cached.
+            	    if(cacheURL.equals(urlToCall))
             	    {
-            	        String line = scanner.nextLine();  
-            	        if(line.equals(httpQueryString)) 
-            	        { 
-            	            blocked=true;
-            	        }
+            	    	cacheHit=true;
+            	    	System.out.println("This website has been cached.");
             	    }
-            	    scanner.close();
-            	} 
-            	catch(FileNotFoundException e)
-            	{ 
-            	
-            	    System.out.println("File was not found");
-            	}
-            	
-            	
-            	if(!blocked)
-            	{
-            		boolean https=false;
-            		System.out.println("sending request to real server for url: "+ httpQueryString);
-	                
-	                //determine whether http or https
-	                URL url;
-	                try
-	                {
-	                	url = new URL(httpQueryString); 
-	                }
-	                catch(Exception e)
-	                {
-	                	https=true;
-	                	url = new URL("https://"+httpQueryString);
-	                }
-	                
-	                //begin send request to server, get response from server
-	                URLConnection conn = url.openConnection();
-	                conn.setDoInput(true);
-	                conn.setDoOutput(false);
-	
-	                // Get the response
-	                InputStream is = null;
-	                //https
-	                if(https)
-	                {
-	                	System.out.println("Enter an http url");
-	                }               
-	                else //http
-	                {
-	                	boolean cacheHit=false;
-	                	File cache=new File("Cache.txt");
-	                	try 
-	                	{
-	                		//check to see if the website was cached
-	                	    Scanner scanner = new Scanner(file);
-	                	    if(scanner.hasNextLine())
-	                	    {
-		                	    String cacheURL=scanner.nextLine();
-		                	    if(cacheURL.equals(httpQueryString))
-		                	    {
-		                	    	cacheHit=true;
-		                	    }
-	                	    }
-	                	    scanner.close();
+        	    }
+        	    scanner.close();
 
-	                	} 
-	                	catch(FileNotFoundException e)
-	                	{ 
-	                	    System.out.println("File was not found");
-	                	}
-	                	
-		                if (conn.getContentLength() > 0)
-		                {
-
-		                	try 
-		                    {
-		                    	if(cacheHit)
-		                    	{
-		                    		//uses cache
-		                      		FileInputStream fis = new FileInputStream(cache);
-		                    		byte[] data = new byte[(int) cache.length()];
-		                    		fis.read(data);
-		                    		fis.close();
-		                    		out.write(data);
-		                       	}
-		                        is = conn.getInputStream();
-		                    	rd = new BufferedReader(new InputStreamReader(is));
-		                    } 
-		                    catch (IOException ioe)
-		                    {
-		                        System.out.println(	"********* IO EXCEPTION **********: " + ioe);
-		                    }
-		                    
-		                }
-	                
-
-	                //end send request to server, get response from server
-	                
-	                //begin send response to client
-	                byte by[] = new byte[ BUFFER_SIZE ];
-	                int index = is.read( by, 0, BUFFER_SIZE );
-
-	                //write url and data to cache
-	                PrintWriter writer = new PrintWriter("Cache.txt");
-	                writer.println(httpQueryString);
-	                writer.println(by);
-
-	                writer.close();
-	                //output to client
-	                while (index != -1)
-	                {
-	                  out.write( by, 0, index );
-	                  index = is.read( by, 0, BUFFER_SIZE );
-	                }
-	                out.flush();
-	                //end send response to client
-	                }
-            	}
-            	else
-            	{
-            		System.out.println("URL BLOCKED");
-            	}
-            	
-            	
-            } 
-            catch (Exception e) 
+        	}
+        	//Print File Not Found Exception if the files are unable to open
+        	catch(FileNotFoundException e)
+        	{ 
+        	    System.out.println("File was not found");
+        	}
+        	
+        	//System.out.println(conn.getContentLength()); 
+        	
+            if (conn.getContentLength() > 0)
             {
-                //output to management console
-                System.err.println("Encountered exception: " + e);
-                out.writeBytes("");
+            	try 
+                {
+                	if(cacheHit)
+                	{
+                		//Uses cache to write all the data
+                  		FileInputStream fis = new FileInputStream(cache);
+                		byte[] data = new byte[(int) cache.length()];
+                		fis.read(data);
+                		fis.close();
+                		outData.write(data);
+                   	}
+                    is = conn.getInputStream();
+                	rd = new BufferedReader(new InputStreamReader(is));
+                	//System.out.println(cacheHit);
+                } 
+                catch (IOException ioe)
+                {
+                	System.out.println("Error 404 Not Found");
+                	outData.writeBytes("HTTP/1.1 404 NOT FOUND" + "\r\n");
+                    System.out.println(	"********* IO EXCEPTION **********: " + ioe);
+                    System.exit(0);
+                }           
             }
+			
+            //Allocating a byte size in the given buffer.
+			byte by[] = new byte[ BUFFER_SIZE ];
+            int index = is.read( by, 0, BUFFER_SIZE );
+            
+            //A string initialized to read all the content of website
+            String s = new String(by); 
 
+            //Writing the URL requested and HTML content to cache file
+            PrintWriter writer = new PrintWriter("Cache.txt");
+            writer.println(urlToCall);
+            writer.println(s);
+
+            writer.close();
+            
+            //Sending the output to the client
+            while (index != -1)
+            {
+               outData.write( by, 0, index );
+               index = is.read( by, 0, BUFFER_SIZE );
+            }
+           
+            int responseCode = conn.getResponseCode();
+            System.out.println();
+                       
+            if (responseCode == 200)
+            {
+            	System.out.println("200 OK");
+            }
+            else if (responseCode == 404)
+            {
+            	System.out.println("404 Not Found");
+
+            }
+            else if (responseCode == 400)
+            {
+            	System.out.println("400 Bad Request");
+            }
+            
+            
+            String outputLine = rd.readLine();
+            while(!outputLine.isEmpty())
+			{
+				System.out.println(outputLine);
+				outputLine = in.readLine(); 
+			}
+			
+//          Map<String, List<String>> map = conn.getHeaderFields();
+//          System.out.println("-------RESPONSE--------\n");
+// 
+//          for (Map.Entry<String, List<String>> entry : map.entrySet()) 
+//          {
+//          		System.out.println(entry.getKey() + " : " +entry.getValue());
+//          }
+//              
+            System.out.println();
             //close all resources
             if (rd != null)
             {
@@ -205,9 +186,9 @@ public class ProxyThread extends Thread
             {
                 in.close();
             }
-            if (socket != null)
+            if (clientSocket != null)
             {
-                socket.close();
+                clientSocket.close();
             }
 
         }
